@@ -1,0 +1,15 @@
+#
+# Docker compose file for CVE-Search
+#
+version: '2'
+networks:
+  bridge:
+    driver: bridge
+services:
+  cve-search:
+    image: "xme/cvesearch"
+    container_name: cvesearch
+    ports:
+      - "5000:5000"
+    networks:
+      - bridge
