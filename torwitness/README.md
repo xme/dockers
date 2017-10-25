@@ -29,7 +29,7 @@ $ cat $HOME/torwitness/urls.txt
 https://blog.rootshell.be
 https://isc.sans.edu
 $ docker run --rm -it -v $HOME/torwitness:/data --cap-add=NET_ADMIN --cap-add=NET_RAW torwitness urls.txt
-      _____           ____ _               _
+```      _____           ____ _               _
      |_   _|__  _ __ / ___| |__   ___  ___| |_
        | |/ _ \| '__| |  _| '_ \ / _ \/ __| __|
        | | (_) | |  | |_| | | | | (_) \__ \ |_
@@ -64,4 +64,4 @@ $ cd $HOME/torwitness
 $ ls
 results-20171025113745 urls.txt
 $ cd results-20171025113745
-$ firefox result.html
+$ firefox result.html``
