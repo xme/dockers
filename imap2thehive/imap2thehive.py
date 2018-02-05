@@ -8,6 +8,7 @@
 #
 # Todo:
 # - Configuration validation
+# - Make the alert keyword part of the config file
 #
 
 from __future__ import print_function
