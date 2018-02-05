@@ -6,7 +6,7 @@ The script is fully configurable via a Python-friendly configuration file. See i
 
 # Usage
 The script can be run manually to import a mailbox or it can be scheduled to run at fixed interval with a cron job. The syntax is simple:
-'''
+```
 # ./imap2thehive.py -h
 usage: imap2thehive.py [-h] [-v] [-c CONFIG]
 
@@ -17,14 +17,14 @@ optional arguments:
   -v, --verbose         verbose output
   -c CONFIG, --config CONFIG
                         configuration file (default: /etc/imap2thehive.conf)
-'''
+```
 
 # Docker Container
 I created a Dockerfile to build a container:
 
-'''
+```
 # git clone https://github.com/xme/dockers
 # cd imap2thehive
 # docker build -t imap2thehive:latest .
 # docker run -v $PWD/imap2thehive.conf:/etc/imap2thehive.conf:ro imap2thehive
-'''
+```
