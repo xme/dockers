@@ -1,5 +1,5 @@
 # Purpose
-The script imap2thehive.py polls an IMAP4 mailbox for new emails and imports fetched messages into an instance of [TheHive](https://thehive-project.org/).
+The script imap2thehive.py polls an IMAP4 mailbox for new emails and imports fetched messages into an instance of [TheHive](https://thehive-project.org/). By default, a new case is created per email read. If the subject of the mail contains "[ALERT]", an alert is created.
 
 # Configuration
 The script is fully configurable via a Python-friendly configuration file. See imap2thehive.conf sample for more details.
