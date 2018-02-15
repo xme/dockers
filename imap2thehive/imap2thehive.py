@@ -8,7 +8,7 @@
 #
 # Todo:
 # - Configuration validation
-# - Make the alert keyword part of the config file
+# - Support for GnuPG
 #
 
 from __future__ import print_function
@@ -26,10 +26,12 @@ import time,datetime
 import json
 import requests
 import uuid
+import tempfile
+import re
 
 try:
     from thehive4py.api import TheHiveApi
-    from thehive4py.models import Case, CaseTask, CustomFieldHelper
+    from thehive4py.models import Case, CaseTask, CaseObservable, CustomFieldHelper
     from thehive4py.models import Alert, AlertArtifact
 except:
     print("[ERROR] Please install thehive4py.")
@@ -47,11 +49,20 @@ config = {
     'thehiveUser': '',
     'thehivePassword': '',
     'caseTLP': '',
-    'caseTags': [],
+    'caseTags': ['email'],
     'caseTasks': [],
+    'caseFiles': ['application/pdf', 'message/rfc822'],
     'alertTLP': '',
-    'alertTags': []
+    'alertTags': ['email']
 }
+
+def slugify(s):
+    """
+    Sanitize filenames
+    Source: https://github.com/django/django/blob/master/django/utils/text.py
+    """
+    s = str(s).strip().replace(' ', '_')
+    return re.sub(r'(?u)[^-\w.]', '', s)
 
 def mailConnect():
 
@@ -98,10 +109,23 @@ def submitTheHive(message):
         if part.get_content_type() == "text/plain":
             body = part.get_payload(decode=True).decode()
         else:
+            # Extract MIME parts
             filename = part.get_filename()
-            if filename:
-                print("[INFO] Found attachment: %s" % filename)
-                attachments.append(filename)
+            mimetype = part.get_content_type()
+            if filename and mimetype:
+                if mimetype in config['caseFiles']:
+                    print("[INFO] Found attachment: %s (%s)" % (filename, mimetype))
+                    # Decode the attachment and save it in a temporary file
+                    charset = part.get_content_charset()
+                    if charset is None:
+                        charset = chardet.detect(bytes(part))['encoding']
+                    fd, path = tempfile.mkstemp(prefix=slugify(filename) + "_")
+                    try:
+                        with os.fdopen(fd, 'w+b') as tmp:
+                            tmp.write(part.get_payload(decode=1))
+                        attachments.append(path)
+                    except OSError as e:
+                        print("[ERROR] Cannot dump attachment to %s: %s" % (path,e.errno))
 
     api = TheHiveApi(config['thehiveURL'], config['thehiveUser'], config['thehivePassword'], {'http': '', 'https': ''})
 
@@ -150,8 +174,26 @@ def submitTheHive(message):
         id = None
         response = api.create_case(case)
         if response.status_code == 201:
+            newID = response.json()['id']
             if args.verbose:
                 print('[INFO] Created case %s' % response.json()['caseId'])
+            if len(attachments) > 0:
+                for path in attachments:
+                   observable = CaseObservable(dataType='file',
+                        data    = [path],
+                        tlp     = int(config['caseTLP']),
+                        ioc     = False,
+                        tags    = config['caseTags'],
+                        message = 'Created by imap2thehive.py'
+                        )
+                   response = api.create_case_observable(newID, observable)
+                   if response.status_code == 201:
+                       if args.verbose:
+                           print('[INFO] Added observable %s to case ID %s' % (path, newID))
+                           os.unlink(path)
+                   else:
+                       print('[ERROR] Cannot add observable: %s - %s (%s)' % (path, response.status_code, response.text))
+                       sys.exit(0)
         else:
             print('[ERROR] Cannot create case: %s (%s)' % (response.status_code, response.text))
             sys.exit(0)
@@ -164,9 +206,8 @@ def readMail(mbox):
     if not mbox:
         return
 
-    #gpg = gnupg.GPG()
     mbox.select(config['imapFolder'])
-    #typ, dat = mbox.search(None, '(ALL)')
+    # DEBUG typ, dat = mbox.search(None, '(ALL)')
     typ, dat = mbox.search(None, '(UNSEEN)')
     newEmails = len(dat[0].split())
     if args.verbose:
@@ -229,6 +270,7 @@ def main():
     config['caseTLP']           = c.get('case', 'tlp')
     config['caseTags']          = c.get('case', 'tags').split(',')
     config['caseTasks']          = c.get('case', 'tasks').split(',')
+    config['caseFiles']          = c.get('case', 'files').split(',')
 
     # New alert config
     config['alertTLP']          = c.get('alert', 'tlp')
