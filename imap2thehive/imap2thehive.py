@@ -9,6 +9,7 @@
 # Todo:
 # - Configuration validation
 # - Support for GnuPG
+# - Configurable tag '[Alert]' to create alerts
 #
 
 from __future__ import print_function
@@ -51,7 +52,7 @@ config = {
     'caseTLP': '',
     'caseTags': ['email'],
     'caseTasks': [],
-    'caseFiles': ['application/pdf', 'message/rfc822'],
+    'caseFiles': [],
     'alertTLP': '',
     'alertTags': ['email']
 }
@@ -113,7 +114,7 @@ def submitTheHive(message):
             filename = part.get_filename()
             mimetype = part.get_content_type()
             if filename and mimetype:
-                if mimetype in config['caseFiles']:
+                if mimetype in config['caseFiles'] or not config['caseFiles']:
                     print("[INFO] Found attachment: %s (%s)" % (filename, mimetype))
                     # Decode the attachment and save it in a temporary file
                     charset = part.get_content_charset()
@@ -270,12 +271,12 @@ def main():
     config['caseTLP']           = c.get('case', 'tlp')
     config['caseTags']          = c.get('case', 'tags').split(',')
     config['caseTasks']          = c.get('case', 'tasks').split(',')
-    config['caseFiles']          = c.get('case', 'files').split(',')
+    if c.has_option('case', 'files'):
+        config['caseFiles']          = c.get('case', 'files').split(',')
 
     # New alert config
     config['alertTLP']          = c.get('alert', 'tlp')
     config['alertTags']         = c.get('alert', 'tags').split(',')
-
 
     if args.verbose:
         print('[INFO] Processing %s@%s:%s/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
