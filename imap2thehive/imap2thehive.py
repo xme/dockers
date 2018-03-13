@@ -54,6 +54,7 @@ config = {
     'caseTags': ['email'],
     'caseTasks': [],
     'caseFiles': [],
+    'caseTemplate': '',
     'alertTLP': '',
     'alertTags': ['email']
 }
@@ -168,13 +169,23 @@ def submitTheHive(message):
             .add_string('attachment', str(attachments))\
             .build()
 
-        case = Case(title=subjectField,
-                    tlp = int(config['caseTLP']), 
-                    flag=False,
-                    tags = config['caseTags'],
-                    description=body,
-                    tasks=tasks,
-                    customFields=customFields)
+        # If a case template is specified, use it instead of the tasks
+        if len(config['caseTemplate']) > 0:
+            case = Case(title=subjectField,
+                        tlp          = int(config['caseTLP']), 
+                        flag         = False,
+                        tags         = config['caseTags'],
+                        description  = body,
+                        template     = config['caseTemplate'],
+                        customFields = customFields)
+        else:
+            case = Case(title        = subjectField,
+                        tlp          = int(config['caseTLP']), 
+                        flag         = False,
+                        tags         = config['caseTags'],
+                        description  = body,
+                        tasks        = tasks,
+                        customFields = customFields)
 
         # Create the case
         id = None
@@ -288,9 +299,16 @@ def main():
     # New case config
     config['caseTLP']           = c.get('case', 'tlp')
     config['caseTags']          = c.get('case', 'tags').split(',')
-    config['caseTasks']          = c.get('case', 'tasks').split(',')
+    if c.has_option('case', 'tasks'):
+        config['caseTasks']     = c.get('case', 'tasks').split(',')
+    if c.has_option('case', 'template'):
+        config['caseTemplate']  = c.get('case', 'template')
     if c.has_option('case', 'files'):
-        config['caseFiles']          = c.get('case', 'files').split(',')
+        config['caseFiles']     = c.get('case', 'files').split(',')
+
+    # Issue a warning of both tasks & template are defined!
+    if len(config['caseTasks']) > 0 and config['caseTemplate'] != '':
+        print('[WARNING] Both case template and tasks are defined. Template (%s) will be used.' % config['caseTemplate'])
 
     # New alert config
     config['alertTLP']          = c.get('alert', 'tlp')
