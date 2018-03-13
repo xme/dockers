@@ -46,6 +46,7 @@ config = {
     'imapUser': '',
     'imapPassword': '',
     'imapFolder': '',
+    'imapExpunge': False,
     'thehiveURL': '',
     'thehiveUser': '',
     'thehivePassword': '',
@@ -94,7 +95,10 @@ def mailConnect():
 
 def submitTheHive(message):
 
-    '''Create a new case in TheHive based on the email'''
+    '''
+    Create a new case in TheHive based on the email
+    Return 'TRUE' is successfully processed otherwise 'FALSE'
+    '''
 
     # Decode email
     msg = email.message_from_bytes(message)
@@ -127,6 +131,7 @@ def submitTheHive(message):
                         attachments.append(path)
                     except OSError as e:
                         print("[ERROR] Cannot dump attachment to %s: %s" % (path,e.errno))
+                        return False
 
     api = TheHiveApi(config['thehiveURL'], config['thehiveUser'], config['thehivePassword'], {'http': '', 'https': ''})
 
@@ -149,7 +154,7 @@ def submitTheHive(message):
                 print('[INFO] Created alert %s' % response.json()['sourceRef'])
         else:
             print('[ERROR] Cannot create alert: %s (%s)' % (response.status_code, response.text))
-            sys.exit(0)
+            return False
 
     else:
         # Prepare the sample case
@@ -194,11 +199,11 @@ def submitTheHive(message):
                            os.unlink(path)
                    else:
                        print('[ERROR] Cannot add observable: %s - %s (%s)' % (path, response.status_code, response.text))
-                       sys.exit(0)
+                       return False
         else:
             print('[ERROR] Cannot create case: %s (%s)' % (response.status_code, response.text))
-            sys.exit(0)
-    return
+            return False
+    return True
 
 def readMail(mbox):
 
@@ -218,7 +223,16 @@ def readMail(mbox):
         if typ != 'OK':
             error(dat[-1])
         message = dat[0][1]
-        submitTheHive(message)
+        if config['imapExpunge']:
+            # If message successfully processed, flag it as 'Deleted' otherwise restore the 'Unread' status
+            if submitTheHive(message) == True:
+                mbox.store(num, '+FLAGS', '\\Deleted')
+                if args.verbose:
+                    print("[INFO] Message %d successfully processed and deleted" % int(num))
+            else:
+                mbox.store(num, '-FLAGS', '\\Seen')
+                print("[WARNING] Message %d not processed and flagged as unread" % int(num))
+    mbox.expunge() 
     return newEmails
 
 def main():
@@ -261,6 +275,10 @@ def main():
     config['imapUser']          = c.get('imap', 'user')
     config['imapPassword']      = c.get('imap', 'password')
     config['imapFolder']        = c.get('imap', 'folder')
+    if c.has_option('imap', 'expunge'):
+        value = c.get('imap', 'expunge')
+        if value == '1' or value == 'true' or value == 'yes':
+             config['imapExpunge']   = True
 
     # TheHive Config
     config['thehiveURL']        = c.get('thehive', 'url')
