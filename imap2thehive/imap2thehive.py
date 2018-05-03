@@ -56,7 +56,8 @@ config = {
     'caseFiles': [],
     'caseTemplate': '',
     'alertTLP': '',
-    'alertTags': ['email']
+    'alertTags': ['email'],
+    'alertKeyword': '\S*\[ALERT\]\S*'
 }
 
 def slugify(s):
@@ -136,7 +137,8 @@ def submitTheHive(message):
 
     api = TheHiveApi(config['thehiveURL'], config['thehiveUser'], config['thehivePassword'], {'http': '', 'https': ''})
 
-    if '[ALERT]' in subjectField:
+    # if '[ALERT]' in subjectField:
+    if re.match(config['alertKeywords'], subjectField, flags=0):
         # Prepare the alert
         sourceRef = str(uuid.uuid4())[0:6]
         alert = Alert(title=subjectField.replace('[ALERT]', ''),
@@ -234,15 +236,18 @@ def readMail(mbox):
         if typ != 'OK':
             error(dat[-1])
         message = dat[0][1]
-        if config['imapExpunge']:
+        if submitTheHive(message) == True:
             # If message successfully processed, flag it as 'Deleted' otherwise restore the 'Unread' status
-            if submitTheHive(message) == True:
+            if config['imapExpunge']:
                 mbox.store(num, '+FLAGS', '\\Deleted')
                 if args.verbose:
                     print("[INFO] Message %d successfully processed and deleted" % int(num))
             else:
-                mbox.store(num, '-FLAGS', '\\Seen')
-                print("[WARNING] Message %d not processed and flagged as unread" % int(num))
+                if args.verbose:
+                    print("[INFO] Message %d successfully processed and flagged as read" % int(num))
+        else:
+            mbox.store(num, '-FLAGS', '\\Seen')
+            print("[WARNING] Message %d not processed and flagged as unread" % int(num))
     mbox.expunge() 
     return newEmails
 
@@ -313,6 +318,14 @@ def main():
     # New alert config
     config['alertTLP']          = c.get('alert', 'tlp')
     config['alertTags']         = c.get('alert', 'tags').split(',')
+    if c.has_option('alert', 'keywords'):
+        config['alertKeywords'] = c.get('alert', 'keywords')
+    # Validate the keywords regex
+    try:
+        re.compile(config['alertKeywords'])
+    except re.error:
+        print('[ERROR] Regular expression "%s" is invalid.' % config['alertKeywords'])
+        sys.exit(1)
 
     if args.verbose:
         print('[INFO] Processing %s@%s:%s/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
