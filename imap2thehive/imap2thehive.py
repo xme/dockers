@@ -39,7 +39,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0.1"
+__version__    = "1.0.2"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -62,11 +62,12 @@ config = {
     'caseFiles'       : [],
     'caseTemplate'    : '',
     'caseObservables' : False,
+    'caseWhitelists'  : None,
     'alertTLP'        : '',
     'alertTags'       : ['email'],
     'alertKeyword'    : '\S*\[ALERT\]\S*'
 }
-
+whitelists = []
 def slugify(s):
     '''
     Sanitize filenames
@@ -74,6 +75,47 @@ def slugify(s):
     '''
     s = str(s).strip().replace(' ', '_')
     return re.sub(r'(?u)[^-\w.]', '', s)
+
+def loadWhitelists(filename):
+    '''
+    Read regex from the provided file, validate them and populate the list
+    '''
+    if not filename:
+        return []
+
+    try:
+        lines = [line.rstrip('\n') for line in open(filename)]
+    except IOError as e:
+        print('[ERROR] Cannot read %s: %s' % (filename, e.strerror))
+        sys.exit(1)
+
+    i = 1
+    w = []
+    for l in lines:
+        if l[0] == '#' or len(l) == 0:
+            # Skip comments and empty lines
+            continue
+        try:
+            re.compile(l)
+        except re.error:
+            print('[ERROR] Line %d: Regular expression "%s" is invalid.' % (l, f))
+            sys.exit(1)
+        i += 1
+        w.append(l)
+    
+    return w
+
+def isWhitelisted(string):
+    '''
+    Check if the provided string matches one of the whitelist regexes
+    '''
+    global whitelists
+    found = False
+    for w in whitelists:
+        if re.search(w, string, re.IGNORECASE):
+            found = True
+            break
+    return found
 
 def searchObservables(buffer, observables):
     '''
@@ -101,9 +143,14 @@ def searchObservables(buffer, observables):
 
             # Bug: Avoid duplicates!
             if not {'type': o['type'], 'value': match } in observables:
-                observables.append({ 'type': o['type'], 'value': match })
-                if args.verbose:
-                    print('[INFO] Found observable %s: %s' % (o['type'], match))
+                # Is the observable whitelisted?
+                if isWhitelisted(match):
+                    if args.verbose:
+                        print('[INFO] Skipping whitelisted observable: %s' % match)
+                else:
+                    observables.append({ 'type': o['type'], 'value': match })
+                    if args.verbose:
+                        print('[INFO] Found observable %s: %s' % (o['type'], match))
             else:
                 print('[INFO] Ignoring duplicate observable: %s' % match)
     return observables
@@ -321,6 +368,7 @@ def readMail(mbox):
 def main():
     global args
     global config
+    global whitelists
 
     parser = argparse.ArgumentParser(
         description = 'Process an IMAP folder to create TheHive alerts/cased.')
@@ -382,6 +430,8 @@ def main():
         value = c.get('case', 'observables')
         if value == '1' or value == 'true' or value == 'yes':
             config['caseObservables'] = True
+    if c.has_option('case', 'whitelists'):
+        config['caseWhitelists'] = c.get('case', 'whitelists')
 
     # Issue a warning of both tasks & template are defined!
     if len(config['caseTasks']) > 0 and config['caseTemplate'] != '':
@@ -398,6 +448,9 @@ def main():
     except re.error:
         print('[ERROR] Regular expression "%s" is invalid.' % config['alertKeywords'])
         sys.exit(1)
+
+    # Validate whitelists
+    whitelists = loadWhitelists(config['caseWhitelists'])
 
     if args.verbose:
         print('[INFO] Processing %s@%s:%d/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
