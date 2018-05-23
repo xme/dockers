@@ -39,7 +39,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0"
+__version__    = "1.0.1"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -48,7 +48,7 @@ __name__       = "imap2thehive"
 args = ''
 config = {
     'imapHost'        : '',
-    'imapPort'        : '',
+    'imapPort'        : 993,
     'imapUser'        : '',
     'imapPassword'    : '',
     'imapFolder'      : '',
@@ -354,7 +354,8 @@ def main():
 
     # IMAP Config
     config['imapHost']          = c.get('imap', 'host')
-    config['imapPort']          = c.get('imap', 'port')
+    if c.has_option('imap', 'port'):
+        config['imapPort']          = int(c.get('imap', 'port'))
     config['imapUser']          = c.get('imap', 'user')
     config['imapPassword']      = c.get('imap', 'password')
     config['imapFolder']        = c.get('imap', 'folder')
@@ -399,7 +400,7 @@ def main():
         sys.exit(1)
 
     if args.verbose:
-        print('[INFO] Processing %s@%s:%s/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
+        print('[INFO] Processing %s@%s:%d/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
 
     readMail(mailConnect())
     return
