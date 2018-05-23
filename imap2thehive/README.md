@@ -28,3 +28,6 @@ I created a Dockerfile to build a container:
 # docker build -t imap2thehive:latest .
 # docker run -v $PWD/imap2thehive.conf:/etc/imap2thehive.conf:ro imap2thehive
 ```
+
+# Observables Whitelisting
+The script is able to extract observables (emails, URLs, files, hashes). To avoid too many false positives, it is possible to create whitelists (based on regular expressions). See the file imap2thehive.whitelists.
