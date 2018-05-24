@@ -92,17 +92,17 @@ def loadWhitelists(filename):
     i = 1
     w = []
     for l in lines:
-        if l[0] == '#' or len(l) == 0:
-            # Skip comments and empty lines
-            continue
-        try:
-            re.compile(l)
-        except re.error:
-            print('[ERROR] Line %d: Regular expression "%s" is invalid.' % (l, f))
-            sys.exit(1)
-        i += 1
-        w.append(l)
-    
+        if len(l) > 0:
+            if l[0] == '#':
+                # Skip comments and empty lines
+                continue
+            try:
+                re.compile(l)
+            except re.error:
+                print('[ERROR] Line %d: Regular expression "%s" is invalid.' % (l, f))
+                sys.exit(1)
+            i += 1
+            w.append(l)
     return w
 
 def isWhitelisted(string):
