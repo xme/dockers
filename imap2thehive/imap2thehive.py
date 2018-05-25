@@ -39,7 +39,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0.2"
+__version__    = "1.0.3"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -56,13 +56,13 @@ config = {
     'thehiveURL'      : '',
     'thehiveUser'     : '',
     'thehivePassword' : '',
+    'thehiveObservables' : False,
+    'thehiveWhitelists'  : None,
     'caseTLP'         : '',
     'caseTags'        : ['email'],
     'caseTasks'       : [],
     'caseFiles'       : [],
     'caseTemplate'    : '',
-    'caseObservables' : False,
-    'caseWhitelists'  : None,
     'alertTLP'        : '',
     'alertTags'       : ['email'],
     'alertKeyword'    : '\S*\[ALERT\]\S*'
@@ -234,15 +234,34 @@ def submitTheHive(message):
 
     # if '[ALERT]' in subjectField:
     if re.match(config['alertKeywords'], subjectField, flags=0):
+        #
+        # Add observables found in the mail body
+        #
+        artifacts = []
+        if config['thehiveObservables'] and len(observables) > 0:
+            for o in observables:
+                artifacts.append(AlertArtifact(dataType=o['type'], data=o['value']))
+
+        #
+        # Prepare tags - add alert keywords found to the list of tags
+        #
+        tags = config['alertTags']
+        match = re.findall(config['alertKeywords'], subjectField)
+        for m in match:
+            tags.append(m)
+
+        #
         # Prepare the alert
+        #
         sourceRef = str(uuid.uuid4())[0:6]
         alert = Alert(title=subjectField.replace('[ALERT]', ''),
-                      tlp = int(config['alertTLP']),
-                      tags = config['alertTags'],
-                      description=body,
-                      type='external',
-                      source=fromField,
-                      sourceRef=sourceRef)
+                      tlp         = int(config['alertTLP']),
+                      tags        = tags,
+                      description = body,
+                      type        = 'external',
+                      source      = fromField,
+                      sourceRef   = sourceRef,
+                      artifacts   = artifacts)
 
         # Create the Alert
         id = None
@@ -310,7 +329,7 @@ def submitTheHive(message):
             #
             # Add observables found in the mail body
             #
-            if config['caseObservables'] and len(observables) > 0:
+            if config['thehiveObservables'] and len(observables) > 0:
                 for o in observables:
                     observable = CaseObservable(
                         dataType = o['type'],
@@ -416,6 +435,12 @@ def main():
     config['thehiveURL']        = c.get('thehive', 'url')
     config['thehiveUser']       = c.get('thehive', 'user')
     config['thehivePassword']   = c.get('thehive', 'password')
+    if c.has_option('thehive', 'observables'):
+        value = c.get('thehive', 'observables')
+        if value == '1' or value == 'true' or value == 'yes':
+            config['thehiveObservables'] = True
+    if c.has_option('thehive', 'whitelists'):
+        config['thehiveWhitelists'] = c.get('thehive', 'whitelists')
 
     # New case config
     config['caseTLP']           = c.get('case', 'tlp')
@@ -426,12 +451,6 @@ def main():
         config['caseTemplate']  = c.get('case', 'template')
     if c.has_option('case', 'files'):
         config['caseFiles']     = c.get('case', 'files').split(',')
-    if c.has_option('case', 'observables'):
-        value = c.get('case', 'observables')
-        if value == '1' or value == 'true' or value == 'yes':
-            config['caseObservables'] = True
-    if c.has_option('case', 'whitelists'):
-        config['caseWhitelists'] = c.get('case', 'whitelists')
 
     # Issue a warning of both tasks & template are defined!
     if len(config['caseTasks']) > 0 and config['caseTemplate'] != '':
@@ -450,7 +469,7 @@ def main():
         sys.exit(1)
 
     # Validate whitelists
-    whitelists = loadWhitelists(config['caseWhitelists'])
+    whitelists = loadWhitelists(config['thehiveWhitelists'])
 
     if args.verbose:
         print('[INFO] Processing %s@%s:%d/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
