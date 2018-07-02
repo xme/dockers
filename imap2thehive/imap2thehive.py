@@ -39,7 +39,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0.3"
+__version__    = "1.0.4"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -245,7 +245,7 @@ def submitTheHive(message):
         #
         # Prepare tags - add alert keywords found to the list of tags
         #
-        tags = config['alertTags']
+        tags = list(config['alertTags'])
         match = re.findall(config['alertKeywords'], subjectField)
         for m in match:
             tags.append(m)
