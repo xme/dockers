@@ -39,7 +39,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0.4"
+__version__    = "1.0.5"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -47,25 +47,26 @@ __name__       = "imap2thehive"
 # Default configuration 
 args = ''
 config = {
-    'imapHost'        : '',
-    'imapPort'        : 993,
-    'imapUser'        : '',
-    'imapPassword'    : '',
-    'imapFolder'      : '',
-    'imapExpunge'     : False,
-    'thehiveURL'      : '',
-    'thehiveUser'     : '',
-    'thehivePassword' : '',
+    'imapHost'           : '',
+    'imapPort'           : 993,
+    'imapUser'           : '',
+    'imapPassword'       : '',
+    'imapFolder'         : '',
+    'imapExpunge'        : False,
+    'thehiveURL'         : '',
+    'thehiveUser'        : '',
+    'thehivePassword'    : '',
     'thehiveObservables' : False,
     'thehiveWhitelists'  : None,
-    'caseTLP'         : '',
-    'caseTags'        : ['email'],
-    'caseTasks'       : [],
-    'caseFiles'       : [],
-    'caseTemplate'    : '',
-    'alertTLP'        : '',
-    'alertTags'       : ['email'],
-    'alertKeyword'    : '\S*\[ALERT\]\S*'
+    'caseTLP'            : '',
+    'caseTags'           : ['email'],
+    'caseTasks'          : [],
+    'caseFiles'          : [],
+    'caseTemplate'       : '',
+    'alertTLP'           : '',
+    'alertTags'          : ['email'],
+    'alertKeyword'       : '\S*\[ALERT\]\S*',
+    'customObservables'  : {}
 }
 whitelists = []
 def slugify(s):
@@ -134,6 +135,10 @@ def searchObservables(buffer, observables):
          { 'type': 'hash',   'regex': r'\b([a-f0-9]{40}|[A-F0-9]{40})\b' },
          { 'type': 'hash',   'regex': r'\b([a-f0-9]{64}|[A-F0-9]{64})\b' }
          ]
+
+    # Add custom observables if any
+    for o in config['customObservables']:
+        observableTypes.append({ 'type': o, 'regex': config['customObservables'][o] })
 
     for o in observableTypes:
         for match in re.findall(o['regex'], buffer, re.MULTILINE|re.IGNORECASE):
@@ -451,6 +456,16 @@ def main():
         config['caseTemplate']  = c.get('case', 'template')
     if c.has_option('case', 'files'):
         config['caseFiles']     = c.get('case', 'files').split(',')
+
+    # Get custom observables if any
+    for o in c.options("custom_observables"):
+        # Validate the regex
+        config['customObservables'][o] = c.get("custom_observables", o)
+        try:
+            re.compile(config['customObservables'][o])
+        except re.error:
+            print('[ERROR] Regular expression "%s" is invalid.' % config['customObservables'][o])
+            sys.exit(1)
 
     # Issue a warning of both tasks & template are defined!
     if len(config['caseTasks']) > 0 and config['caseTemplate'] != '':
