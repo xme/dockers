@@ -28,6 +28,7 @@ import requests
 import uuid
 import tempfile
 import re
+from email.parser import HeaderParser
 
 try:
     from thehive4py.api import TheHiveApi
@@ -39,7 +40,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0.5"
+__version__    = "1.0.6"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -145,19 +146,7 @@ def searchObservables(buffer, observables):
             # Bug: If match is a tuple (example for domain or fqdn), use the 1st element
             if type(match) is tuple:
                 match = match[0]
-
-            # Bug: Avoid duplicates!
-            if not {'type': o['type'], 'value': match } in observables:
-                # Is the observable whitelisted?
-                if isWhitelisted(match):
-                    if args.verbose:
-                        print('[INFO] Skipping whitelisted observable: %s' % match)
-                else:
-                    observables.append({ 'type': o['type'], 'value': match })
-                    if args.verbose:
-                        print('[INFO] Found observable %s: %s' % (o['type'], match))
-            else:
-                print('[INFO] Ignoring duplicate observable: %s' % match)
+            observables.append({ 'type': o['type'], 'value': match })
     return observables
 
 def mailConnect():
@@ -203,18 +192,31 @@ def submitTheHive(message):
     subjectField = str(decode[0])
     if args.verbose:
         print("[INFO] From: %s Subject: %s" % (fromField, subjectField))
+
     attachments = []
     observables = []
+
+    # Extract SMTP headers and search for observables
+    parser = HeaderParser()
+    headers = parser.parsestr(msg.as_string())
+    headers_string = ''
+    i = 0
+    while  i < len(headers.keys()):
+        headers_string = headers_string + headers.keys()[i] + ': ' + headers.values()[i] + '\n'
+        i+=1
+    # Temporary disabled
+    # observables = searchObservables(headers_string, observables)
+
     body = ''
     for part in msg.walk():
         if part.get_content_type() == "text/plain":
             body = part.get_payload(decode=True).decode()
-            observables = searchObservables(body, observables)
+            observables.extend(searchObservables(body, observables))
         elif part.get_content_type() == "text/html":
             if args.verbose:
                 print("[INFO] Searching for observable in HTML code")
             html = part.get_payload(decode=True).decode()
-            observables = searchObservables(html, observables)
+            observables.extend(searchObservables(html, observables))
         else:
             # Extract MIME parts
             filename = part.get_filename()
@@ -235,9 +237,28 @@ def submitTheHive(message):
                         print("[ERROR] Cannot dump attachment to %s: %s" % (path,e.errno))
                         return False
 
+    # Cleanup observables (remove duplicates)
+    new_observables = []
+    for o in observables:
+        if not {'type': o['type'], 'value': o['value'] } in new_observables:
+            # Is the observable whitelisted?
+            if isWhitelisted(o['value']):
+                if args.verbose:
+                    print('[INFO] Skipping whitelisted observable: %s' % o['value'])
+            else:
+                new_observables.append({ 'type': o['type'], 'value': o['value'] })
+                if args.verbose:
+                    print('[INFO] Found observable %s: %s' % (o['type'], o['value']))
+        else:
+            print('[INFO] Ignoring duplicate observable: %s' % o['value'])
+    if args.verbose:
+        print("[INFO] Removed duplicate observables: %d -> %d" % (len(observables), len(new_observables)))
+    observables = new_observables
+
     api = TheHiveApi(config['thehiveURL'], config['thehiveUser'], config['thehivePassword'], {'http': '', 'https': ''})
 
-    # if '[ALERT]' in subjectField:
+    # Search for interesting keywords in subjectField:
+    print("DEBUG: Searching for %s in '%s'" % (config['alertKeywords'], subjectField))
     if re.match(config['alertKeywords'], subjectField, flags=0):
         #
         # Add observables found in the mail body
