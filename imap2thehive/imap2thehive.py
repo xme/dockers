@@ -91,7 +91,7 @@ def loadWhitelists(filename):
 
     try:
         lines = [line.rstrip('\n') for line in open(filename)]
-    except IOerror as e:
+    except IOError as e:
         log.error('Cannot read %s: %s' % (filename, e.strerror))
         sys.exit(1)
 
