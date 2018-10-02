@@ -13,6 +13,8 @@
 
 from __future__ import print_function
 from __future__ import unicode_literals
+import logging
+import logging.config
 import argparse
 import configparser
 import imaplib
@@ -30,12 +32,14 @@ import tempfile
 import re
 from email.parser import HeaderParser
 
+log = ''
+
 try:
     from thehive4py.api import TheHiveApi
     from thehive4py.models import Case, CaseTask, CaseObservable, CustomFieldHelper
     from thehive4py.models import Alert, AlertArtifact
 except:
-    print("[ERROR] Please install thehive4py.")
+    log.error("Please install thehive4py.")
     sys.exit(1)
 
 __author__     = "Xavier Mertens"
@@ -88,7 +92,7 @@ def loadWhitelists(filename):
     try:
         lines = [line.rstrip('\n') for line in open(filename)]
     except IOError as e:
-        print('[ERROR] Cannot read %s: %s' % (filename, e.strerror))
+        log.error('Cannot read %s: %s' % (filename, e.strerror))
         sys.exit(1)
 
     i = 1
@@ -101,7 +105,7 @@ def loadWhitelists(filename):
             try:
                 re.compile(l)
             except re.error:
-                print('[ERROR] Line %d: Regular expression "%s" is invalid.' % (l, f))
+                log.error('Line %d: Regular expression "%s" is invalid.' % (l, f))
                 sys.exit(1)
             i += 1
             w.append(l)
@@ -154,11 +158,13 @@ def mailConnect():
     Connection to mailserver and handle the IMAP connection
     '''
 
+    global log
+
     try:
         mbox = imaplib.IMAP4_SSL(config['imapHost'], config['imapPort'])
     except:
         typ,val = sys.exc_info()[:2]
-        print("[ERROR] Cannot connect to IMAP server %s: %s" % (config['imapHost'],str(val)))
+        log.error("Cannot connect to IMAP server %s: %s" % (config['imapHost'],str(val)))
         mbox = None
         return
 
@@ -168,12 +174,11 @@ def mailConnect():
         typ,dat = sys.exc_info()[:2]
 
     if typ != 'OK':
-        print("[ERROR] Cannot open %s for %s@%s: %s" % (config['imapFolder'], config['imapUser'], config['imapHost'], str(dat)))
+        log.error("Cannot open %s for %s@%s: %s" % (config['imapFolder'], config['imapUser'], config['imapHost'], str(dat)))
         mbox = None
         return
 
-    if args.verbose:
-        print('[INFO] Connected to IMAP server.')
+    log.info('Connected to IMAP server.')
 
     return mbox
 
@@ -184,14 +189,21 @@ def submitTheHive(message):
     Return 'TRUE' is successfully processed otherwise 'FALSE'
     '''
 
+    global log
+
     # Decode email
     msg = email.message_from_bytes(message)
     decode = email.header.decode_header(msg['From'])[0]
-    fromField = str(decode[0])
+    if decode[1] is not None:
+        fromField = decode[0].decode(decode[1])
+    else:
+        fromField = str(decode[0])
     decode = email.header.decode_header(msg['Subject'])[0]
-    subjectField = str(decode[0])
-    if args.verbose:
-        print("[INFO] From: %s Subject: %s" % (fromField, subjectField))
+    if decode[1] is not None:
+        subjectField = decode[0].decode(decode[1])
+    else:
+        subjectField = str(decode[0])
+    log.info("From: %s Subject: %s" % (fromField, subjectField))
 
     attachments = []
     observables = []
@@ -210,12 +222,16 @@ def submitTheHive(message):
     body = ''
     for part in msg.walk():
         if part.get_content_type() == "text/plain":
-            body = part.get_payload(decode=True).decode()
+            try:
+                body = part.get_payload(decode=True).decode()
+            except UnicodeDecodeError:
+                body = part.get_payload(decode=True).decode('ISO-8859-1')
             observables.extend(searchObservables(body, observables))
         elif part.get_content_type() == "text/html":
-            if args.verbose:
-                print("[INFO] Searching for observable in HTML code")
-            html = part.get_payload(decode=True).decode()
+            try:
+                html = part.get_payload(decode=True).decode()
+            except UnicodeDecodeError:
+                html = part.get_payload(decode=True).decode('ISO-8859-1')
             observables.extend(searchObservables(html, observables))
         else:
             # Extract MIME parts
@@ -223,7 +239,7 @@ def submitTheHive(message):
             mimetype = part.get_content_type()
             if filename and mimetype:
                 if mimetype in config['caseFiles'] or not config['caseFiles']:
-                    print("[INFO] Found attachment: %s (%s)" % (filename, mimetype))
+                    log.info("Found attachment: %s (%s)" % (filename, mimetype))
                     # Decode the attachment and save it in a temporary file
                     charset = part.get_content_charset()
                     if charset is None:
@@ -233,8 +249,8 @@ def submitTheHive(message):
                         with os.fdopen(fd, 'w+b') as tmp:
                             tmp.write(part.get_payload(decode=1))
                         attachments.append(path)
-                    except OSError as e:
-                        print("[ERROR] Cannot dump attachment to %s: %s" % (path,e.errno))
+                    except OSerror as e:
+                        log.error("Cannot dump attachment to %s: %s" % (path,e.errno))
                         return False
 
     # Cleanup observables (remove duplicates)
@@ -243,22 +259,19 @@ def submitTheHive(message):
         if not {'type': o['type'], 'value': o['value'] } in new_observables:
             # Is the observable whitelisted?
             if isWhitelisted(o['value']):
-                if args.verbose:
-                    print('[INFO] Skipping whitelisted observable: %s' % o['value'])
+                log.debug('Skipping whitelisted observable: %s' % o['value'])
             else:
                 new_observables.append({ 'type': o['type'], 'value': o['value'] })
-                if args.verbose:
-                    print('[INFO] Found observable %s: %s' % (o['type'], o['value']))
+                log.debug('Found observable %s: %s' % (o['type'], o['value']))
         else:
-            print('[INFO] Ignoring duplicate observable: %s' % o['value'])
-    if args.verbose:
-        print("[INFO] Removed duplicate observables: %d -> %d" % (len(observables), len(new_observables)))
+            log.info('Ignoring duplicate observable: %s' % o['value'])
+    log.info("Removed duplicate observables: %d -> %d" % (len(observables), len(new_observables)))
     observables = new_observables
 
     api = TheHiveApi(config['thehiveURL'], config['thehiveUser'], config['thehivePassword'], {'http': '', 'https': ''})
 
     # Search for interesting keywords in subjectField:
-    print("DEBUG: Searching for %s in '%s'" % (config['alertKeywords'], subjectField))
+    log.debug("Searching for %s in '%s'" % (config['alertKeywords'], subjectField))
     if re.match(config['alertKeywords'], subjectField, flags=0):
         #
         # Add observables found in the mail body
@@ -293,10 +306,9 @@ def submitTheHive(message):
         id = None
         response = api.create_alert(alert)
         if response.status_code == 201:
-            if args.verbose:
-                print('[INFO] Created alert %s' % response.json()['sourceRef'])
+            log.info('Created alert %s' % response.json()['sourceRef'])
         else:
-            print('[ERROR] Cannot create alert: %s (%s)' % (response.status_code, response.text))
+            log.error('Cannot create alert: %s (%s)' % (response.status_code, response.text))
             return False
 
     else:
@@ -334,24 +346,22 @@ def submitTheHive(message):
         response = api.create_case(case)
         if response.status_code == 201:
             newID = response.json()['id']
-            if args.verbose:
-                print('[INFO] Created case %s' % response.json()['caseId'])
+            log.info('Created case %s' % response.json()['caseId'])
             if len(attachments) > 0:
                 for path in attachments:
-                   observable = CaseObservable(dataType='file',
+                    observable = CaseObservable(dataType='file',
                         data    = [path],
                         tlp     = int(config['caseTLP']),
                         ioc     = False,
                         tags    = config['caseTags'],
                         message = 'Found as email attachment'
                         )
-                   response = api.create_case_observable(newID, observable)
-                   if response.status_code == 201:
-                       if args.verbose:
-                           print('[INFO] Added observable %s to case ID %s' % (path, newID))
-                           os.unlink(path)
-                   else:
-                       print('[WARNING] Cannot add observable: %s - %s (%s)' % (path, response.status_code, response.text))
+                    response = api.create_case_observable(newID, observable)
+                    if response.status_code == 201:
+                        log.info('Added observable %s to case ID %s' % (path, newID))
+                        os.unlink(path)
+                    else:
+                        log.warning('Cannot add observable: %s - %s (%s)' % (path, response.status_code, response.text))
             #
             # Add observables found in the mail body
             #
@@ -367,12 +377,11 @@ def submitTheHive(message):
                         )
                     response = api.create_case_observable(newID, observable)
                     if response.status_code == 201:
-                        if args.verbose:
-                            print('[INFO] Added observable %s: %s to case ID %s' % (o['type'], o['value'], newID))
+                        log.info('Added observable %s: %s to case ID %s' % (o['type'], o['value'], newID))
                     else:
-                         print('[WARNING] Cannot add observable %s: %s - %s (%s)' % (o['type'], o['value'], response.status_code, response.text))
+                         log.warning('Cannot add observable %s: %s - %s (%s)' % (o['type'], o['value'], response.status_code, response.text))
         else:
-            print('[ERROR] Cannot create case: %s (%s)' % (response.status_code, response.text))
+            log.error('Cannot create case: %s (%s)' % (response.status_code, response.text))
             return False
     return True
 
@@ -381,15 +390,16 @@ def readMail(mbox):
     Search for unread email in the specific folder
     '''
 
+    global log
+
     if not mbox:
         return
 
     mbox.select(config['imapFolder'])
-    # DEBUG typ, dat = mbox.search(None, '(ALL)')
+    # debug typ, dat = mbox.search(None, '(ALL)')
     typ, dat = mbox.search(None, '(UNSEEN)')
     newEmails = len(dat[0].split())
-    if args.verbose:
-        print("[INFO] %d unread messages to process" % newEmails)
+    log.info("%d unread messages to process" % newEmails)
     for num in dat[0].split():
         typ, dat = mbox.fetch(num, '(RFC822)')
         if typ != 'OK':
@@ -399,14 +409,12 @@ def readMail(mbox):
             # If message successfully processed, flag it as 'Deleted' otherwise restore the 'Unread' status
             if config['imapExpunge']:
                 mbox.store(num, '+FLAGS', '\\Deleted')
-                if args.verbose:
-                    print("[INFO] Message %d successfully processed and deleted" % int(num))
+                log.info("Message %d successfully processed and deleted" % int(num))
             else:
-                if args.verbose:
-                    print("[INFO] Message %d successfully processed and flagged as read" % int(num))
+                log.info("Message %d successfully processed and flagged as read" % int(num))
         else:
             mbox.store(num, '-FLAGS', '\\Seen')
-            print("[WARNING] Message %d not processed and flagged as unread" % int(num))
+            log.warning("Message %d not processed and flagged as unread" % int(num))
     mbox.expunge() 
     return newEmails
 
@@ -414,6 +422,7 @@ def main():
     global args
     global config
     global whitelists
+    global log
 
     parser = argparse.ArgumentParser(
         description = 'Process an IMAP folder to create TheHive alerts/cased.')
@@ -435,15 +444,23 @@ def main():
         args.verbose = False
 
     if not os.path.isfile(args.configFile):
-        print('[ERROR] Configuration file %s is not readable.' % args.configFile)
+        log.error('Configuration file %s is not readable.' % args.configFile)
         sys.exit(1);
 
     try:
         c = configparser.ConfigParser()
         c.read(args.configFile)
-    except OSError as e:
-        print('[ERROR] Cannot read config file %s: %s' % (args.configFile, e.errno))
+    except OSerror as e:
+        log.error('Cannot read config file %s: %s' % (args.configFile, e.errno))
         sys.exit(1)
+
+    logging.config.fileConfig(args.configFile)
+
+    if args.verbose:
+        root_logger = logging.getLogger('root')
+        root_logger.setLevel(logging.DEBUG)
+
+    log = logging.getLogger(__name__)
 
     # IMAP Config
     config['imapHost']          = c.get('imap', 'host')
@@ -485,12 +502,12 @@ def main():
         try:
             re.compile(config['customObservables'][o])
         except re.error:
-            print('[ERROR] Regular expression "%s" is invalid.' % config['customObservables'][o])
+            log.error('Regular expression "%s" is invalid.' % config['customObservables'][o])
             sys.exit(1)
 
     # Issue a warning of both tasks & template are defined!
     if len(config['caseTasks']) > 0 and config['caseTemplate'] != '':
-        print('[WARNING] Both case template and tasks are defined. Template (%s) will be used.' % config['caseTemplate'])
+        log.warning('Both case template and tasks are defined. Template (%s) will be used.' % config['caseTemplate'])
 
     # New alert config
     config['alertTLP']          = c.get('alert', 'tlp')
@@ -501,18 +518,17 @@ def main():
     try:
         re.compile(config['alertKeywords'])
     except re.error:
-        print('[ERROR] Regular expression "%s" is invalid.' % config['alertKeywords'])
+        log.error('Regular expression "%s" is invalid.' % config['alertKeywords'])
         sys.exit(1)
 
     # Validate whitelists
     whitelists = loadWhitelists(config['thehiveWhitelists'])
 
-    if args.verbose:
-        print('[INFO] Processing %s@%s:%d/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
+    log.info('Processing %s@%s:%d/%s' % (config['imapUser'], config['imapHost'], config['imapPort'], config['imapFolder']))
 
     readMail(mailConnect())
     return
 
 if __name__ == 'imap2thehive':
-	main()
-	sys.exit(0)
+    main()
+    sys.exit(0)
