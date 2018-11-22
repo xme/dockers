@@ -244,7 +244,9 @@ def submitTheHive(message):
                     charset = part.get_content_charset()
                     if charset is None:
                         charset = chardet.detect(bytes(part))['encoding']
-                    fd, path = tempfile.mkstemp(prefix=slugify(filename) + "_")
+                    # Get filename extension to not break TheHive analysers (see Github #11)
+                    fname, fextension = os.path.splitext(filename)
+                    fd, path = tempfile.mkstemp(prefix=slugify(fname) + "_", suffix=fextension)
                     try:
                         with os.fdopen(fd, 'w+b') as tmp:
                             tmp.write(part.get_payload(decode=1))
