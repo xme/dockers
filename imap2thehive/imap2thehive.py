@@ -44,7 +44,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0.6"
+__version__    = "1.0.7"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -58,9 +58,9 @@ config = {
     'imapPassword'       : '',
     'imapFolder'         : '',
     'imapExpunge'        : False,
+    'imapSpam'           : '',
     'thehiveURL'         : '',
-    'thehiveUser'        : '',
-    'thehivePassword'    : '',
+    'thehiveApiKey'	 : '',
     'thehiveObservables' : False,
     'thehiveWhitelists'  : None,
     'caseTLP'            : '',
@@ -270,7 +270,7 @@ def submitTheHive(message):
     log.info("Removed duplicate observables: %d -> %d" % (len(observables), len(new_observables)))
     observables = new_observables
 
-    api = TheHiveApi(config['thehiveURL'], config['thehiveUser'], config['thehivePassword'], {'http': '', 'https': ''})
+    api = TheHiveApi(config['thehiveURL'], config['thehiveApiKey'])
 
     # Search for interesting keywords in subjectField:
     log.debug("Searching for %s in '%s'" % (config['alertKeywords'], subjectField))
@@ -407,6 +407,13 @@ def readMail(mbox):
         if typ != 'OK':
             error(dat[-1])
         message = dat[0][1]
+
+        # Ignore messages matching the spam regex if present
+        if len(config['imapSpam']) > 0:
+            if re.match(config['imapSpam'], message.decode('utf-8'), flags=0):
+                log.info("Message %d flagged as spam and skipped" % int(num))
+                continue
+
         if submitTheHive(message) == True:
             # If message successfully processed, flag it as 'Deleted' otherwise restore the 'Unread' status
             if config['imapExpunge']:
@@ -475,11 +482,17 @@ def main():
         value = c.get('imap', 'expunge')
         if value == '1' or value == 'true' or value == 'yes':
              config['imapExpunge']   = True
+    if c.has_option('imap', 'spam'):
+        config['imapSpam']          = c.get('imap', 'spam')
+        try:
+            re.compile(config['imapSpam'])
+        except re.error:
+            log.error('Regular expression "%s" is invalid.' % config['imapSpam'])
+            sys.exit(1)
 
     # TheHive Config
     config['thehiveURL']        = c.get('thehive', 'url')
-    config['thehiveUser']       = c.get('thehive', 'user')
-    config['thehivePassword']   = c.get('thehive', 'password')
+    config['thehiveApiKey']     = c.get('thehive', 'apikey')
     if c.has_option('thehive', 'observables'):
         value = c.get('thehive', 'observables')
         if value == '1' or value == 'true' or value == 'yes':
