@@ -1,4 +1,4 @@
-FROM 
+FROM centos:7
 MAINTAINER Axel Gocan <axel.gocan@protonmail.com>
 
 RUN yum update && \
