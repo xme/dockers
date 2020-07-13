@@ -11,6 +11,8 @@ RUN pip3 install -r requirements.txt
 
 WORKDIR /opt
 COPY imap2thehive.py .
+COPY imap2thehive.conf /etc/imap2thehive.conf
+COPY imap2thehive.whitelists /opt/imap2thehive.whitelists 
 
 # Create the cronjob
 # An empty line is mandatory!
