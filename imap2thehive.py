@@ -545,5 +545,10 @@ def main():
     return
 
 if __name__ == 'imap2thehive':
-    main()
-    sys.exit(0)
+    log = logging.getLogger(__name__)
+
+    while True:
+        log.info('Running main loop')
+        main()
+        log.info('Finished main loop, sleeping')
+        time.sleep(120)

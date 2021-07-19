@@ -5,6 +5,6 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY . .
+COPY imap2thehive.py ./imap2thehive.py
 
-CMD [ "python", "./imap2thehive.py" ]
+CMD [ "python", "imap2thehive.py" ]
