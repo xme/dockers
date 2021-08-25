@@ -44,7 +44,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0.7"
+__version__    = "1.0.8"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -216,8 +216,8 @@ def submitTheHive(message):
     while  i < len(headers.keys()):
         headers_string = headers_string + headers.keys()[i] + ': ' + headers.values()[i] + '\n'
         i+=1
-    # Temporary disabled
-    # observables = searchObservables(headers_string, observables)
+    # Testing email headers.
+    observables.extend(searchObservables(headers_string, observables))
 
     body = ''
     for part in msg.walk():
