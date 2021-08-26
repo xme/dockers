@@ -138,7 +138,8 @@ def searchObservables(buffer, observables):
          { 'type': 'mail',   'regex': r'\b([a-z][_a-z0-9-.+]+@[a-z0-9-.]+\.[a-z]+)\b' },
          { 'type': 'hash',   'regex': r'\b([a-f0-9]{32}|[A-F0-9]{32})\b' },
          { 'type': 'hash',   'regex': r'\b([a-f0-9]{40}|[A-F0-9]{40})\b' },
-         { 'type': 'hash',   'regex': r'\b([a-f0-9]{64}|[A-F0-9]{64})\b' }
+         { 'type': 'hash',   'regex': r'\b([a-f0-9]{64}|[A-F0-9]{64})\b' },
+         { 'type': 'headers',    'regex': r'\b(([A-Za-z-]+):\s([^\r\n]+(?:\r?\n(?![A-Za-z-]+:\s)[^\r\n]+)*))\b'}
          ]
 
     # Add custom observables if any
