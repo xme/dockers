@@ -1,0 +1,8 @@
+{
+	"name": "imap2thehive",
+	"description": "CronJob to sync our AlienVault email box with TheHive",
+	"owner": "Polaris",
+	"type": "tool",
+	"status": "unreleased",
+	"region-type": null
+}

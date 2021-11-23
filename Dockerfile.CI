@@ -1,0 +1,10 @@
+FROM python:3
+
+WORKDIR /app
+
+COPY git_src/requirements.txt /app/requirements.txt
+COPY git_src/imap2thehive.py /app/imap2thehive.py
+
+RUN pip install --no-cache-dir -r /app/requirements.txt
+
+CMD [ "python", "imap2thehive.py" ]

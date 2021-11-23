@@ -7,3 +7,4 @@ requests
 uuid
 python-magic
 thehive4py
+chardet

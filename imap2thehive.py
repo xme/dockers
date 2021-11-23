@@ -44,7 +44,7 @@ except:
 
 __author__     = "Xavier Mertens"
 __license__    = "GPLv3"
-__version__    = "1.0.7"
+__version__    = "1.0.8"
 __maintainer__ = "Xavier Mertens"
 __email__      = "xavier@rootshell.be"
 __name__       = "imap2thehive"
@@ -138,7 +138,8 @@ def searchObservables(buffer, observables):
          { 'type': 'mail',   'regex': r'\b([a-z][_a-z0-9-.+]+@[a-z0-9-.]+\.[a-z]+)\b' },
          { 'type': 'hash',   'regex': r'\b([a-f0-9]{32}|[A-F0-9]{32})\b' },
          { 'type': 'hash',   'regex': r'\b([a-f0-9]{40}|[A-F0-9]{40})\b' },
-         { 'type': 'hash',   'regex': r'\b([a-f0-9]{64}|[A-F0-9]{64})\b' }
+         { 'type': 'hash',   'regex': r'\b([a-f0-9]{64}|[A-F0-9]{64})\b' },
+         { 'type': 'headers',    'regex': r'\b(([A-Za-z-]+):\s([^\r\n]+(?:\r?\n(?![A-Za-z-]+:\s)[^\r\n]+)*))\b'}
          ]
 
     # Add custom observables if any
@@ -216,8 +217,8 @@ def submitTheHive(message):
     while  i < len(headers.keys()):
         headers_string = headers_string + headers.keys()[i] + ': ' + headers.values()[i] + '\n'
         i+=1
-    # Temporary disabled
-    # observables = searchObservables(headers_string, observables)
+    # Testing email headers.
+    observables.extend(searchObservables(headers_string, observables))
 
     body = ''
     for part in msg.walk():
@@ -545,5 +546,10 @@ def main():
     return
 
 if __name__ == 'imap2thehive':
-    main()
-    sys.exit(0)
+    log = logging.getLogger(__name__)
+
+    while True:
+        log.info('Running main loop')
+        main()
+        log.info('Finished main loop, sleeping')
+        time.sleep(120)
